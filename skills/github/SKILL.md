@@ -14,6 +14,18 @@ How to use GitHub. This skill covers the mechanics of the surface, not what to i
 - Use `git --no-pager` for local operations; `--no-pager` is valid for `git`.
 - Never merge a PR.
 
+## Repository maintainer permissions
+
+This Stanford factory identifies maintainers by permissions on the target repository, not by membership in its GitHub organization or the Stanford Warp team.
+
+Run `python3 skills/github/scripts/check-repo-maintainer <owner>/<repo> <github-login>` for the PR author and for humans making privileged approval, assignment, or reviewer-request instructions. This reads `GET repos/<owner>/<repo>/collaborators/<login>/permission`.
+
+- Exit 0: verified `write`, `maintain`, or `admin` permission; maintainer rules apply.
+- Exit 2: `none`, `read`, or `triage` permission, or an automated account; contributor rules apply.
+- Exit 1: permission could not be verified; do not grant maintainer privileges or perform the requested privileged action. For ordinary reviews, use the contributor gate rules and review budget instead of skipping the review.
+
+Do not infer permissions from organization membership, author association, a display name, or Warp team membership. Use the exact GitHub login from the event or explicit human instruction.
+
 ## Branches and commits
 
 - Branch off the repository's base branch. Confirm the base branch from the repository's conventions; do not assume `main`. Capture it once into a variable (e.g. `BASE_BRANCH=develop`) when you check out, and reuse that same variable everywhere a base branch is named - including the PR's `--base` - instead of typing a branch name again.
@@ -147,7 +159,7 @@ jq -n --rawfile body /tmp/review_body.md \
   GH_PAGER=cat gh api repos/<o>/<r>/pulls/<pr>/reviews --method POST --input -
 ```
 
-- `event` is `REQUEST_CHANGES` or `COMMENT`. NEVER use `APPROVE`: a bot approval can satisfy branch protection, and merging is a human decision. When the factory's verdict is acceptance, post a `COMMENT` review whose body includes the line `Verdict: accepted` - that exact marker is what `python3 scripts/request-owner-review` checks before allowing human escalation.
+- `event` is `REQUEST_CHANGES` or `COMMENT`. NEVER use `APPROVE`: a bot approval can satisfy branch protection, and merging is a human decision. When the factory's verdict is acceptance, post a `COMMENT` review whose body includes the line `Verdict: accepted` as a durable advisory verdict. Do not automatically request a human reviewer.
 - When posting a new review pass on a revision, dismiss the factory's own previous review first (`gh api repos/<o>/<r>/pulls/<pr>/reviews/<review_id>/dismissals --method PUT -f message="Superseded by a new review pass" -f event="DISMISS"`), so stale verdicts do not linger.
 - An inline comment must point at a file and line in the PR's diff. GitHub silently drops comments on unchanged lines. Verify each `path` and `line` against the diff first, and move the rest into the body.
 - A suggestion block replaces exactly the commented line range. Keep the indentation exact, and do not include lines from outside the range.
@@ -182,21 +194,16 @@ The script replies with a link to the commit, then resolves each listed thread. 
 
 Do not also post a summary comment - the per-thread replies are already the complete record.
 
-## Reviewers and workflow gates (script-enforced)
+## Assignments, reviewers, and workflow gates
 
-Three bundled scripts make the workflow's gate mechanics deterministic. Always use them instead of raw `gh` for these operations, and obey their exit codes - a BLOCKED result is final for the current pass, never something to work around.
+Automatic owner selection, issue assignment, routing mentions, and reviewer requests are disabled. Preserve existing assignees and leave unassigned issues unassigned. Do not consult an ownership map to choose someone. A verified repository maintainer may explicitly request an assignment change naming the exact GitHub login. A reviewer request additionally requires an accepted factory verdict and an explicit maintainer instruction naming the exact reviewer.
+
+The retained scripts check repository permissions, enforce workflow gates, and render comments. Obey their exit codes - a BLOCKED result is final for the current pass, never something to work around.
 
 ```bash
-# Request the owning maintainer's review - ONLY path to human escalation.
-# Verifies the factory's latest review on the PR is accepted, then requests
-# the exact owner already resolved from live warp-ownership by find-owner.
-# Exit 0 requested / 2 verdict not approving / 3 no owner match / 4 no factory review.
-python3 scripts/request-owner-review <owner>/<repo> <pr> --bot <factory-bot-login> --owner <owner-login>
-
-# Assign the routed owner to an issue after find-owner routing.
-# Exit 0 assigned / 2 not assignable (mention fallback) /
-# 3 issue ineligible because of needs-info, duplicate, or support escalation.
-python3 scripts/assign-issue-owner <owner>/<repo> <issue> <owner-login>
+# Check repository-scoped maintainer permission without mutations.
+# Exit 0 maintainer / 2 contributor / 1 unverifiable (no privileges).
+python3 skills/github/scripts/check-repo-maintainer <owner>/<repo> <github-login>
 
 # Verify a gated stage may start. Run before EVERY spec/implement dispatch.
 # Exit 0 proceed / 2 blocked (announce-only if the trigger was a gate label).
@@ -208,7 +215,7 @@ python3 scripts/check-stage-gate <owner>/<repo> <issue> <spec|implement> --facto
 python3 scripts/render-comment <triage|response> < payload.json > /tmp/body.md
 ```
 
-Never call `gh pr edit --add-reviewer` directly for workflow escalation. The only raw-reviewer exception is executing an explicit human instruction that names the reviewer (e.g. a maintainer comment "request a review from @x"):
+Never call `gh pr edit --add-reviewer` for automatic workflow escalation. Only after an accepted factory verdict and an explicit instruction from a verified repository maintainer naming the reviewer may you use:
 
 ```bash
 GH_PAGER=cat gh pr edit <pr> --repo <owner>/<repo> --add-reviewer <user>

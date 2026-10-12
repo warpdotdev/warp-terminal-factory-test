@@ -10,6 +10,8 @@ triggers:
 ---
 A maintainer applied the `plan-approved` label to a pull request. This marks the spec in that PR as approved.
 
+First verify the human label actor with `python3 skills/github/scripts/check-repo-maintainer <owner/repo> <actor-login>`. Continue only on exit 0 (repository write, maintain, or admin access). Bot actors, non-maintainers, and unavailable permission evidence do not authorize approval bookkeeping or implementation. Do not substitute organization or Warp team membership.
+
 Perform the approval bookkeeping, then decide whether implementation starts:
 
 1. Post a short fixed comment on the PR confirming the spec is approved and naming the linked issue. Do not echo PR or issue content into it.

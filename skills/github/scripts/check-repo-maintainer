@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Check repository-scoped maintainer permission without mutating GitHub.
+
+Usage: python3 check-repo-maintainer <owner/repo> <github-login>
+Exit 0: write, maintain, or admin. Exit 2: non-maintainer.
+Exit 1: permission unavailable or invalid response; grants no privileges.
+"""
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from urllib.parse import quote
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("repo")
+    parser.add_argument("login")
+    args = parser.parse_args()
+    if not re.fullmatch(r"[^/\s]+/[^/\s]+", args.repo):
+        print("UNKNOWN: expected owner/repo.", file=sys.stderr)
+        return 1
+    if args.login.lower().endswith("[bot]"):
+        print("NON_MAINTAINER: automated accounts do not authorize human approval.")
+        return 2
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]*", args.login):
+        print("UNKNOWN: invalid GitHub login.", file=sys.stderr)
+        return 1
+    owner, repo = args.repo.split("/")
+    endpoint = (
+        f"repos/{quote(owner, safe='')}/{quote(repo, safe='')}"
+        f"/collaborators/{quote(args.login, safe='')}/permission"
+    )
+    try:
+        result = subprocess.run(
+            ["gh", "api", endpoint, "--method", "GET"],
+            capture_output=True,
+            text=True,
+            env=os.environ | {"GH_PAGER": "cat"},
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        print("UNKNOWN: repository permission lookup unavailable.", file=sys.stderr)
+        return 1
+    if result.returncode != 0:
+        print("UNKNOWN: repository permission lookup unavailable.", file=sys.stderr)
+        return 1
+    try:
+        data = json.loads(result.stdout)
+    except (ValueError, TypeError):
+        print("UNKNOWN: invalid repository permission response.", file=sys.stderr)
+        return 1
+    permission = data.get("permission") if isinstance(data, dict) else None
+    if not isinstance(permission, str):
+        print("UNKNOWN: missing repository permission.", file=sys.stderr)
+        return 1
+    if permission in {"write", "maintain", "admin"}:
+        print(f"MAINTAINER: @{args.login} has {permission} access to {args.repo}.")
+        return 0
+    if permission in {"none", "read", "triage"}:
+        print(f"NON_MAINTAINER: @{args.login} has {permission} access to {args.repo}.")
+        return 2
+    print("UNKNOWN: unrecognized repository permission.", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

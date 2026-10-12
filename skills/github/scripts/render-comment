@@ -19,12 +19,11 @@ triage payload:
     },
     "follow_up_questions": [{"question": "...", "reasoning": "..."}],
     "duplicates": [{"issue_number": 12, "title": "...", "reason": "..."}],
-    "routing_owner": "login",                              # optional
     "footer": "Responding as ... View run ..."             # optional
   }
   Layout: findings above the fold; follow-up questions; duplicate overlaps;
   an always-present collapsible "Maintainer details" expando holding structured
-  triage analysis plus duplicate and question reasoning; the routing line; the
+  triage analysis plus duplicate and question reasoning; the
   automated-analysis disclaimer; the footer.
 
 response payload:
@@ -97,10 +96,8 @@ def render_triage(p):
         maintainer.append("**Question reasoning**\n\n" + "\n".join(q_reasons))
     parts.append(details_block("Maintainer details", "\n\n".join(maintainer)))
 
-    owner = (p.get("routing_owner") or "").strip().lstrip("@")
-    if owner:
-        parts.append(f"Routing to @{owner} to review and apply a gate label "
-                     "(`ready-to-spec` / `ready-to-implement`) if this should proceed.")
+    if p.get("routing_owner"):
+        raise SystemExit("ERROR: automatic ownership routing is disabled; omit 'routing_owner'")
 
     parts.append(DISCLAIMER)
     footer = (p.get("footer") or "").strip()

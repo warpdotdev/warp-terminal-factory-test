@@ -7,8 +7,6 @@ codeForges:
 repositories:
     - owner: warpdotdev
       name: warp-stanford
-    - owner: warpdotdev
-      name: warp-ownership
 integrations: []
 agentDefaults:
     model: glm-5.3-flash-fireworks
