@@ -1,0 +1,13 @@
+schemaVersion: v1alpha1
+name: warp-terminal-factory
+alias: warp-terminal-factory
+credentialStrategy: EXECUTOR
+codeForges:
+    - GITHUB
+repositories:
+    - owner: warpdotdev
+      name: warp-stanford
+integrations: []
+agentDefaults:
+    model: auto-genius
+    runner: default
