@@ -7,7 +7,8 @@ codeForges:
 repositories:
     - owner: warpdotdev
       name: warp-stanford
-integrations: []
+integrations:
+    - type: slack
 agentDefaults:
     model: glm-5.3-flash-fireworks
     runner: default
