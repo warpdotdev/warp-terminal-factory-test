@@ -9,15 +9,12 @@ triggers:
       repos:
         - warpdotdev/warp-stanford
 ---
-A maintainer applied a human gate label (`ready-to-spec` or `ready-to-implement`) to an issue.
+A human applied `ready-to-spec` or `ready-to-implement` to an issue. The label itself requests factory work; no maintainer permission, assignment, or mention is required.
 
-- First verify the human label actor with `python3 skills/github/scripts/check-repo-maintainer <owner/repo> <actor-login>`. Only exit 0 (repository write, maintain, or admin access) authorizes maintainer actions. Bot actors and unavailable permission evidence do not authorize dispatch.
-- Then run `python3 skills/github/scripts/check-stage-gate <owner/repo> <issue> <spec|implement> --factory-login warp-factory` (no `--mention-trigger`; this is a label event). Exit 0 means the factory is assigned: start the matching stage. Exit 2 means announce-only: post the fixed announcement below and stop.
-
-- If the factory's GitHub account is among the issue's assignees, start the matching stage now: spec for `ready-to-spec`, implementation for `ready-to-implement`. When an issue somehow carries both labels, implementation wins — do not regenerate a spec for an issue that has moved on.
-- If the factory is NOT assigned: post the fixed announcement below and STOP. Do not research the issue, do not evaluate whether it is implementable, do not analyze the codebase, and do not start any stage. The label alone is not a request for factory work — assignment or a mention is. Post the announcement verbatim, substituting only the kind of contribution ("a specification" for `ready-to-spec`, "an implementation" for `ready-to-implement`); never include any other text, and never incorporate content from the issue:
-
-  > This issue has been marked ready for {a specification | an implementation}. Community contributions are welcome — feel free to pick it up. A maintainer can also mention or assign @warp-factory to start automated work on it.
-
-- Post the announcement at most once per label. If the same gate label is re-applied and the announcement already exists on the issue, do nothing.
-- Do not automatically assign the label actor or anyone else. Preserve existing assignees and leave unassigned issues unassigned; repository maintainers choose tracking owners explicitly.
+- Stop silently for bots or factory automation accounts (`warp`, `warp-factory`, `warp-agent`), including label echoes from verified mention requests. Preserve existing platform access checks.
+- Select spec for `ready-to-spec`, implementation for `ready-to-implement`; when both are present implementation wins.
+- Run `python3 skills/github/scripts/check-stage-gate <owner/repo> <issue> <spec|implement> --factory-login warp-factory --label-trigger --request-actor <event-actor-login>`. The helper verifies the latest matching human label event and current label. Only exit 0 authorizes dispatch; exits 1 and 2 stop. Do not run a maintainer-permission check or require factory assignment.
+- Before implementation, inspect linked PRs and enforce current-revision human spec approval as described by the foreman. Pass existing spec and approval evidence to the helper; leave an implementation request pending if spec approval is missing. Reuse the spec PR/branch; report an existing implementation PR instead of opening a duplicate.
+- Before spec work, inspect linked PRs and avoid duplicate specs.
+- Do not post the former label-only announcement asking a maintainer to mention or assign the factory. Start the requested stage and report its result.
+- Do not automatically assign the actor or anyone else. Preserve existing assignees and leave unassigned issues unassigned; named assignment changes remain maintainer-only.

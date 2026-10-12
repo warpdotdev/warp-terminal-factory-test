@@ -1,56 +1,223 @@
 #!/usr/bin/env python3
-"""Check whether a gated stage may start on an issue. Run before ANY spec or implement dispatch.
+"""Verify human authorization before every spec/implementation dispatch.
 
-Usage: check-stage-gate <owner/repo> <issue-number> <spec|implement> --factory-login <login> [--mention-trigger]
+Explicit requests require --request-comment-id and --request-actor from the
+current platform-authorized GitHub mention event. No maintainer permission or
+ready label is needed. Supported standalone lines:
+  @warp /spec                 (also: @warp spec this for me)
+  @warp /implement            (also: @warp implement this)
+  @warp /approve-spec         (also: @warp spec approved)
+@warp-factory works too. Put approval and implementation on separate lines.
+Quoted, fenced, negated, or otherwise ambiguous prose does not authorize work.
 
-Deterministic gate:
-  - spec requires the `ready-to-spec` label; implement requires `ready-to-implement`
-    (or `auto-implement`, which is only honored by the creation-time automation).
-  - The factory must be authorized: its login is among the issue's assignees,
-    OR the triggering event was a direct factory mention (pass --mention-trigger
-    ONLY when the automation that fired is the mention/assign automation).
+For requests on a linked factory spec PR, pass --spec-pr. Implementation with
+an existing spec additionally needs --approval-comment-id, or verified legacy
+plan-approved evidence supplied as --label-spec-approved. The foreman must
+verify factory authorship and current-revision approval before using either.
 
-Exit 0 = PROCEED. Exit 2 = BLOCKED (post the fixed announcement if the trigger
-was a gate label, then stop). Obey the exit code; never dispatch past a BLOCKED.
+Human label events use --label-trigger --request-actor; assignment is not
+required. Legacy label + assignment/mention and creation-time shortcuts remain.
+Exit 0 proceeds, 2 blocks, 1 fails closed on unavailable/invalid evidence.
 """
 import argparse
 import json
+import os
+import re
 import subprocess
 import sys
 
 GATE = {"spec": "ready-to-spec", "implement": "ready-to-implement"}
+COMMANDS = {
+    "/spec": "spec", "write a spec": "spec",
+    "spec this for me": "spec", "spec this": "spec",
+    "write a spec for this": "spec", "please spec this for me": "spec",
+    "please write a spec": "spec",
+    "/implement": "implement", "implement this": "implement",
+    "implement this for me": "implement", "please implement this": "implement",
+    "/approve-spec": "approve-spec", "spec approved": "approve-spec",
+    "plan approved": "approve-spec",
+}
+
+
+def requested_stages(body):
+    stages = set()
+    fence = None
+    if re.search(r"\b(do not|don't|not yet|hold off|wait for|cancel|pause)\b", body, re.IGNORECASE):
+        return stages
+    body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+    for line in body.splitlines():
+        stripped = line.lstrip()
+        marker = re.match(r"(`{3,}|~{3,})", stripped)
+        if marker:
+            token = marker.group(1)
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence):
+                fence = None
+            continue
+        if fence or line.startswith(("    ", "\t")) or stripped.startswith(">"):
+            continue
+        match = re.fullmatch(
+            r"@(warp-factory|warp)\s+(.+?)\s*[.!]?", stripped, re.IGNORECASE
+        )
+        if match:
+            command = match.group(2).lower().rstrip(".!").strip()
+            if command in COMMANDS:
+                stages.add(COMMANDS[command])
+    return stages
+
+
+def get_json(endpoint, pages=False):
+    result = subprocess.run(
+        ["gh", "api", endpoint, "--method", "GET"] +
+        (["--paginate", "--slurp"] if pages else []),
+        capture_output=True, text=True, timeout=30,
+        env=os.environ | {"GH_PAGER": "cat"},
+    )
+    if result.returncode:
+        raise ValueError("GitHub evidence unavailable")
+    data = json.loads(result.stdout)
+    if not isinstance(data, list if pages else dict):
+        raise ValueError("Invalid GitHub response")
+    return data
+
+
+def verified_label_actor(repo, number, label, actor):
+    pages = get_json(f"repos/{repo}/issues/{number}/events", pages=True)
+    events = [event for page in pages for event in page]
+    matches = [
+        event for event in events
+        if event.get("event") in {"labeled", "unlabeled"}
+        and (event.get("label") or {}).get("name") == label
+    ]
+    if not matches:
+        raise ValueError("Missing label-event evidence")
+    latest = max(matches, key=lambda event: event["id"])
+    user = latest.get("actor") or {}
+    login = user.get("login") or ""
+    if (latest.get("event") != "labeled" or user.get("type") != "User" or
+            login.lower() != actor.lower() or login.lower().endswith("[bot]") or
+            login.lower() in {"warp", "warp-factory", "warp-agent"}):
+        raise ValueError("Latest label event does not match the human actor")
+
+
+def verified_comment(repo, number, comment_id, actor=None):
+    data = get_json(f"repos/{repo}/issues/comments/{comment_id}")
+    user = data.get("user") or {}
+    login = user.get("login")
+    if (data.get("id") != comment_id or
+            data.get("issue_url", "").lower() !=
+            f"https://api.github.com/repos/{repo}/issues/{number}".lower() or
+            user.get("type") != "User" or not isinstance(login, str) or
+            login.lower().endswith("[bot]") or
+            login.lower() in {"warp", "warp-factory", "warp-agent"} or
+            (actor is not None and login.lower() != actor.lower()) or
+            not isinstance(data.get("body"), str)):
+        raise ValueError("Comment does not prove a matching human request")
+    return requested_stages(data["body"])
+
+
+def verified_spec(repo, issue, number):
+    data = get_json(f"repos/{repo}/pulls/{number}")
+    labels = {label["name"] for label in data.get("labels", [])}
+    body = data.get("body") or ""
+    linked = (
+        re.search(rf"(?<![\w/])#{issue}(?!\d)", body) or
+        re.search(rf"https://github\.com/{re.escape(repo)}/issues/{issue}(?!\d)", body)
+    )
+    if (data.get("number") != number or data.get("state") != "open" or
+            not data.get("title", "").startswith("Spec:") or
+            data.get("base", {}).get("repo", {}).get("full_name", "").lower() != repo.lower() or
+            "factory:warp-terminal-factory" not in labels or not linked):
+        raise ValueError("PR is not an open linked factory spec")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("repo")
     ap.add_argument("issue", type=int)
-    ap.add_argument("stage", choices=["spec", "implement"])
+    ap.add_argument("stage", choices=["spec", "implement", "approve-spec"])
     ap.add_argument("--factory-login", required=True)
     ap.add_argument("--mention-trigger", action="store_true")
+    ap.add_argument("--creation-trigger", action="store_true")
+    ap.add_argument("--request-comment-id", type=int)
+    ap.add_argument("--request-actor")
+    ap.add_argument("--label-trigger", action="store_true")
+    ap.add_argument("--spec-pr", type=int)
+    ap.add_argument("--request-on-issue", action="store_true")
+    ap.add_argument("--approval-comment-id", type=int)
+    ap.add_argument("--label-spec-approved", action="store_true")
+    ap.add_argument("--approved-continuation", action="store_true")
     args = ap.parse_args()
-
-    res = subprocess.run(
-        ["gh", "issue", "view", str(args.issue), "--repo", args.repo,
-         "--json", "labels,assignees"],
-        capture_output=True, text=True,
-    )
-    if res.returncode != 0:
-        print(f"ERROR: {res.stderr.strip()}", file=sys.stderr)
+    if (not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or
+            args.issue <= 0 or
+            any(value is not None and value <= 0 for value in
+                (args.request_comment_id, args.spec_pr, args.approval_comment_id))):
+        print("ERROR: invalid repository or reference.", file=sys.stderr)
         return 1
-    data = json.loads(res.stdout)
-    labels = {l["name"] for l in data.get("labels", [])}
-    assignees = {a["login"].lower() for a in data.get("assignees", [])}
-
-    required = GATE[args.stage]
-    if required not in labels and not (args.stage == "implement" and "auto-implement" in labels):
-        print(f"BLOCKED: issue lacks the `{required}` gate label. No factory work may start.")
+    try:
+        data = get_json(f"repos/{args.repo}/issues/{args.issue}")
+        if data.get("number") != args.issue or data.get("pull_request"):
+            raise ValueError("Expected the matching issue, not a PR")
+        labels = {label["name"] for label in data.get("labels", [])}
+        assignees = {a["login"].lower() for a in data.get("assignees", [])}
+        if args.spec_pr:
+            verified_spec(args.repo, args.issue, args.spec_pr)
+        if args.label_trigger:
+            if not args.request_actor or args.request_comment_id:
+                raise ValueError("Label events require only the event actor")
+            number = args.spec_pr if args.stage == "approve-spec" else args.issue
+            label = "plan-approved" if args.stage == "approve-spec" else GATE[args.stage]
+            if number is None:
+                raise ValueError("Spec approval requires the spec PR")
+            if args.stage != "approve-spec" and label not in labels:
+                print("BLOCKED: requested ready label is no longer present.")
+                return 2
+            verified_label_actor(args.repo, number, label, args.request_actor)
+            authorized = True
+        elif args.request_comment_id is not None or args.request_actor is not None:
+            if not args.request_comment_id or not args.request_actor:
+                raise ValueError("Both triggering comment id and actor are required")
+            stages = verified_comment(
+                args.repo, args.issue if args.request_on_issue else (args.spec_pr or args.issue),
+                args.request_comment_id, args.request_actor,
+            )
+            if ("spec" in stages and "implement" in stages) or args.stage not in stages:
+                print("BLOCKED: use a standalone @warp /spec, /implement, or /approve-spec line.")
+                return 2
+            authorized = True
+        elif args.stage == "approve-spec":
+            authorized = False
+        elif args.approved_continuation:
+            authorized = (
+                args.stage == "implement" and args.spec_pr is not None
+                and "ready-to-implement" in labels
+                and (args.approval_comment_id is not None or args.label_spec_approved)
+            )
+        elif args.creation_trigger:
+            authorized = args.stage == "implement" and "auto-implement" in labels
+        else:
+            authorized = GATE[args.stage] in labels and (
+                args.factory_login.lower() in assignees or args.mention_trigger
+            )
+        if args.stage == "approve-spec" and not args.spec_pr:
+            authorized = False
+        if args.stage == "implement" and args.spec_pr:
+            approved = args.label_spec_approved
+            if args.approval_comment_id:
+                approved = "approve-spec" in verified_comment(
+                    args.repo, args.spec_pr, args.approval_comment_id,
+                )
+            if not approved:
+                print("BLOCKED: existing spec requires verified human approval.")
+                return 2
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, KeyError, AttributeError):
+        print("ERROR: authorization evidence unavailable or invalid; no dispatch.", file=sys.stderr)
+        return 1
+    if not authorized:
+        print("BLOCKED: explicit human stage request or legacy label authorization required.")
         return 2
-    if args.factory_login.lower() not in assignees and not args.mention_trigger:
-        print("BLOCKED: gate label present but the factory is not assigned and this was not a "
-              "mention trigger. Post the fixed announcement (once) and stop.")
-        return 2
-    print(f"PROCEED: `{required}` present and the factory is authorized for {args.stage}.")
+    print(f"PROCEED: human authorization verified for {args.stage}.")
     return 0
 
 

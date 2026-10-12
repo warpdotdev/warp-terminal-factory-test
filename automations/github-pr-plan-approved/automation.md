@@ -8,13 +8,13 @@ triggers:
       repos:
         - warpdotdev/warp-stanford
 ---
-A maintainer applied the `plan-approved` label to a pull request. This marks the spec in that PR as approved.
+A human applied `plan-approved` to a factory spec PR. No maintainer permission is required; existing platform access checks remain.
 
-First verify the human label actor with `python3 skills/github/scripts/check-repo-maintainer <owner/repo> <actor-login>`. Continue only on exit 0 (repository write, maintain, or admin access). Bot actors, non-maintainers, and unavailable permission evidence do not authorize approval bookkeeping or implementation. Do not substitute organization or Warp team membership.
+Stop silently for bots or factory automation accounts (`warp`, `warp-factory`, `warp-agent`), including label echoes from mention-based approval. Verify factory authorship and same-repo issue linkage, then run `python3 skills/github/scripts/check-stage-gate <owner/repo> <issue> approve-spec --factory-login warp-factory --spec-pr <pr> --label-trigger --request-actor <event-actor-login>`. Only exit 0 authorizes bookkeeping.
 
 Perform the approval bookkeeping, then decide whether implementation starts:
 
-1. Post a short fixed comment on the PR confirming the spec is approved and naming the linked issue. Do not echo PR or issue content into it.
+1. Post a short fixed comment confirming approval and the linked issue. Record the human actor, label-event URL, and current spec head SHA as durable approval evidence. Do not echo PR or issue content.
 2. On the linked same-repo issue: remove the `ready-to-spec` label (the spec stage is complete) and post a one-line note that the spec was approved, linking the spec PR.
-3. Implementation dispatch is still gated: start the implementation stage ONLY if the linked issue carries `ready-to-implement` AND the factory's account is assigned to it. If either is missing, stop after the bookkeeping and note in the issue comment that a maintainer can apply `ready-to-implement` and assign the factory to begin implementation.
-4. Never apply `ready-to-implement` yourself, and never merge the spec PR — both remain human actions.
+3. Continue implementation only if the linked issue carries `ready-to-implement`, representing an already pending human request. No assignment is needed. Verify the approval covers the current head, then use the helper's implementation stage with `--spec-pr <pr> --label-spec-approved --approved-continuation`. Reuse the same PR/branch. If no ready label is present, stop and explain that a human can apply `ready-to-implement` or mention `@warp implement this`.
+4. Do not infer an implementation request from approval alone or apply `ready-to-implement` autonomously. Never merge the spec PR.

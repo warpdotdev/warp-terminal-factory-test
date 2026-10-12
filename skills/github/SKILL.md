@@ -18,11 +18,11 @@ How to use GitHub. This skill covers the mechanics of the surface, not what to i
 
 This Stanford factory identifies maintainers by permissions on the target repository, not by membership in its GitHub organization or the Stanford Warp team.
 
-Run `python3 skills/github/scripts/check-repo-maintainer <owner>/<repo> <github-login>` for the PR author and for humans making privileged approval, assignment, or reviewer-request instructions. This reads `GET repos/<owner>/<repo>/collaborators/<login>/permission`.
+Run `python3 skills/github/scripts/check-repo-maintainer <owner>/<repo> <github-login>` for review-budget classification and privileged assignment or reviewer-request instructions. This reads `GET repos/<owner>/<repo>/collaborators/<login>/permission`. Do not require maintainer permission for explicit human stage requests, human ready-label events, or spec approval by comment/label.
 
 - Exit 0: verified `write`, `maintain`, or `admin` permission; maintainer rules apply.
 - Exit 2: `none`, `read`, or `triage` permission, or an automated account; contributor rules apply.
-- Exit 1: permission could not be verified; do not grant maintainer privileges or perform the requested privileged action. For ordinary reviews, use the contributor gate rules and review budget instead of skipping the review.
+- Exit 1: permission could not be verified; do not grant maintainer privileges or perform protected operations. For ordinary reviews, use the contributor review budget instead of skipping the review. Missing ready labels are not a review-blocking finding.
 
 Do not infer permissions from organization membership, author association, a display name, or Warp team membership. Use the exact GitHub login from the event or explicit human instruction.
 
@@ -200,20 +200,31 @@ Automatic owner selection, issue assignment, routing mentions, and reviewer requ
 
 The retained scripts check repository permissions, enforce workflow gates, and render comments. Obey their exit codes - a BLOCKED result is final for the current pass, never something to work around.
 
+Students can request work by applying `ready-to-spec` or `ready-to-implement`, without factory assignment, or by a direct supported mention such as `@warp spec this for me` or `@warp implement this`. Verify the human event before dispatch. Verified mentions apply the corresponding ready label and dispatch in the same run; never apply ready labels autonomously from triage. Ignore factory/bot-authored label echoes. GitHub still determines who may apply labels; this policy does not grant label permissions.
+
+An existing factory spec requires human approval of its current revision, by a supported approval mention or human `plan-approved` label. Record actor, evidence URL, and spec head SHA. Approval continues implementation only if a ready-to-implement request is pending or the comment explicitly requests implementation. Reuse the spec PR and branch.
+
 ```bash
 # Check repository-scoped maintainer permission without mutations.
 # Exit 0 maintainer / 2 contributor / 1 unverifiable (no privileges).
 python3 skills/github/scripts/check-repo-maintainer <owner>/<repo> <github-login>
 
-# Verify a gated stage may start. Run before EVERY spec/implement dispatch.
-# Exit 0 proceed / 2 blocked (announce-only if the trigger was a gate label).
-python3 scripts/check-stage-gate <owner>/<repo> <issue> <spec|implement> --factory-login <login> [--mention-trigger]
+# Verify explicit human mention before dispatch (exit 0 / blocked 2 / unknown 1).
+python3 scripts/check-stage-gate <owner>/<repo> <issue> <spec|implement> --factory-login <login> --request-comment-id <id> --request-actor <actor>
+
+# Human ready-label event: no assignment or maintainer lookup.
+python3 scripts/check-stage-gate <owner>/<repo> <issue> <spec|implement> --factory-login <login> --label-trigger --request-actor <actor>
+
+# Human spec approval on the linked factory spec PR.
+python3 scripts/check-stage-gate <owner>/<repo> <issue> approve-spec --factory-login <login> --spec-pr <pr> --request-comment-id <id> --request-actor <actor>
 
 # Render triage and response comment bodies from the fixed templates.
 # The structure (sections, "Maintainer details"/"Reasoning" expandos,
 # disclaimer, footer) is script-owned; supply only content as JSON on stdin.
 python3 scripts/render-comment <triage|response> < payload.json > /tmp/body.md
 ```
+
+Before implementation with an existing spec, add `--spec-pr <pr>` and `--approval-comment-id <id>` for verified current-revision comment approval, or `--label-spec-approved` only after verifying human label approval against the current head. Use `--request-on-issue` if the request comment is on the issue. After approved bookkeeping, a pending ready label can continue using `--approved-continuation`; no assignment is needed. Legacy labeled mentions/assignments remain supported; `--creation-trigger` is restricted to the original issue-created `auto-implement` shortcut. Never fall back to a legacy path after explicit request verification fails.
 
 Never call `gh pr edit --add-reviewer` for automatic workflow escalation. Only after an accepted factory verdict and an explicit instruction from a verified repository maintainer naming the reviewer may you use:
 
