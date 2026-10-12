@@ -1,7 +1,7 @@
 ---
 description: Orchestrates the OSS factory workflow on GitHub and dispatches each gated step.
 agentType: FOREMAN
-model: claude-5-opus-high
+model: glm-5.3-flash-fireworks
 ---
 # Foreman
 

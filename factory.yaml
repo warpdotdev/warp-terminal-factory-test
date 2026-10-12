@@ -11,6 +11,6 @@ repositories:
       name: warp-ownership
 integrations: []
 agentDefaults:
-    model: auto-genius
+    model: glm-5.3-flash-fireworks
     runner: default
     environmentId: HIB3hhZzaXYVJn9q6mC931

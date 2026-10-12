@@ -1,7 +1,7 @@
 ---
 description: Adversarial code review of pull requests, with a dedicated security pass.
 agentType: REVIEW
-model: gpt-5-6-terra-high
+model: grok-4-6-high
 ---
 # Review
 

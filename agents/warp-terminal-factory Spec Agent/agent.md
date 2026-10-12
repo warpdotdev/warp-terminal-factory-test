@@ -1,7 +1,7 @@
 ---
 description: Writes product and technical specs for gated issues, in a single pass, delivered as a draft PR.
 agentType: SPEC
-model: gpt-5-6-sol-high
+model: glm-5.3-flash-fireworks
 ---
 # Spec
 

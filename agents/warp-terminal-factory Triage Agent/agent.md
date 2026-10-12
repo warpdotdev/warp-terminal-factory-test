@@ -1,7 +1,7 @@
 ---
 description: Triages new GitHub issues — classification, reproducibility, root cause, labels, duplicates, and follow-up questions.
 agentType: TRIAGE
-model: grok-4-5-high
+model: grok-4-6-high
 ---
 # Triage
 

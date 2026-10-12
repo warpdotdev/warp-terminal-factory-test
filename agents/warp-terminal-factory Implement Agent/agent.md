@@ -1,6 +1,7 @@
 ---
 description: Implements gated issues and delivers draft pull requests.
 agentType: IMPLEMENT
+model: glm-5.3-flash-fireworks
 ---
 # Implementation
 
