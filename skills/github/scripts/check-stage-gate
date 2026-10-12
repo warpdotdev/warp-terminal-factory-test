@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Check whether a gated stage may start on an issue. Run before ANY spec or implement dispatch.
+
+Usage: check-stage-gate <owner/repo> <issue-number> <spec|implement> --factory-login <login> [--mention-trigger]
+
+Deterministic gate:
+  - spec requires the `ready-to-spec` label; implement requires `ready-to-implement`
+    (or `auto-implement`, which is only honored by the creation-time automation).
+  - The factory must be authorized: its login is among the issue's assignees,
+    OR the triggering event was a direct factory mention (pass --mention-trigger
+    ONLY when the automation that fired is the mention/assign automation).
+
+Exit 0 = PROCEED. Exit 2 = BLOCKED (post the fixed announcement if the trigger
+was a gate label, then stop). Obey the exit code; never dispatch past a BLOCKED.
+"""
+import argparse
+import json
+import subprocess
+import sys
+
+GATE = {"spec": "ready-to-spec", "implement": "ready-to-implement"}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("repo")
+    ap.add_argument("issue", type=int)
+    ap.add_argument("stage", choices=["spec", "implement"])
+    ap.add_argument("--factory-login", required=True)
+    ap.add_argument("--mention-trigger", action="store_true")
+    args = ap.parse_args()
+
+    res = subprocess.run(
+        ["gh", "issue", "view", str(args.issue), "--repo", args.repo,
+         "--json", "labels,assignees"],
+        capture_output=True, text=True,
+    )
+    if res.returncode != 0:
+        print(f"ERROR: {res.stderr.strip()}", file=sys.stderr)
+        return 1
+    data = json.loads(res.stdout)
+    labels = {l["name"] for l in data.get("labels", [])}
+    assignees = {a["login"].lower() for a in data.get("assignees", [])}
+
+    required = GATE[args.stage]
+    if required not in labels and not (args.stage == "implement" and "auto-implement" in labels):
+        print(f"BLOCKED: issue lacks the `{required}` gate label. No factory work may start.")
+        return 2
+    if args.factory_login.lower() not in assignees and not args.mention_trigger:
+        print("BLOCKED: gate label present but the factory is not assigned and this was not a "
+              "mention trigger. Post the fixed announcement (once) and stop.")
+        return 2
+    print(f"PROCEED: `{required}` present and the factory is authorized for {args.stage}.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

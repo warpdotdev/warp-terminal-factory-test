@@ -2,10 +2,13 @@
 name: Efficiency
 description: Whether the agent worked directly toward its result, or wasted effort on redundant steps, avoidable rework, or unnecessary back-and-forth.
 agents:
+    - warp-terminal-factory Review Agent
     - warp-terminal-factory Foreman Agent
+    - warp-terminal-factory Implement Agent
+    - warp-terminal-factory Spec Agent
     - warp-terminal-factory Triage Agent
 labels:
-    - value: highly_efficient
+    - value: very_efficient
       description: 'The agent took a direct path: nothing re-read or re-run, independent steps batched, no work redone.'
       score: 1
     - value: mostly_efficient
@@ -14,17 +17,17 @@ labels:
     - value: mostly_inefficient
       description: The agent wasted effort repeatedly, or caused a round of rework an earlier check would have prevented.
       score: 0.4
-    - value: highly_inefficient
+    - value: very_inefficient
       description: 'The agent''s waste dominated the run: the same defect reworked across cycles, repeated user correction, or extended flailing / looping.'
       score: 0.2
 passingScore: 0.5
 samplingRate: 10
-model: gpt-5-6-luna-xhigh
+model: gemini-3.7-flash
 selfImprovement: true
 ---
 **Rubric**
 
-Evaluate the full cost of reaching the result using recorded cost, duration, and tool-call metrics from Platform facts when present, plus the steps the agent took, rework it caused elsewhere in the loop, and human attention it consumed. Score against what a competent engineer with the same tools would have needed, not against what was achievable with only what the agent happened to have. A mistake that looks unavoidable in context still counts if better tooling, a skill, or a check would have prevented it — name that cause in the reason. The bullets below are common sources of waste, not an exhaustive checklist — judge any other way the run cost more than it should have.
+Evaluate the agent's trajectory to reach the result: the steps the agent took, rework it caused elsewhere in the loop, and human attention it consumed. Score against what a competent engineer with the same tools would have needed, not against what was achievable with only what the agent happened to have. A mistake that looks unavoidable in context still counts if better tooling, a skill, or a check would have prevented it — name that cause in the reason. The bullets below are common sources of waste, not an exhaustive checklist — judge any other way the run cost more than it should have.
 
 Assess:
 

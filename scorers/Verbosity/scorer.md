@@ -2,7 +2,10 @@
 name: Verbosity
 description: Whether the agent's written, text output was proportionate to the work.
 agents:
+    - warp-terminal-factory Review Agent
     - warp-terminal-factory Foreman Agent
+    - warp-terminal-factory Implement Agent
+    - warp-terminal-factory Spec Agent
     - warp-terminal-factory Triage Agent
 labels:
     - value: proportionate
@@ -16,7 +19,7 @@ labels:
       score: 0.1
 passingScore: 0.5
 samplingRate: 10
-model: gpt-5-6-luna-xhigh
+model: gemini-3.7-flash
 selfImprovement: true
 ---
 **Rubric**

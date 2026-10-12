@@ -103,7 +103,7 @@ A GitHub comment is permanent and stacks in the PR timeline - be concise. Aim fo
 
 ### Footer
 
-End every comment - including replies from `scripts/resolve-threads` - with:
+End every comment - including replies from `python3 scripts/resolve-threads` - with:
 
 ```
 Responding as <factory name>: [Open session](<session url>) · [View in factory](<factory url>)
@@ -124,11 +124,11 @@ No link back to the PR - redundant on the surface the reader is already on. Reso
   ```bash
   "$OZ_CLI" run get "$OZ_RUN_ID" --output-format json --jq '.session_link // empty'
   ```
-- `<factory url>`: `$OZ_RUN_ID` is injected for every Factory run. `$WARP_FACTORY_ORIGIN` is available only when the Factory origin is configured. When it is available, use `${WARP_FACTORY_ORIGIN}/runs/${OZ_RUN_ID}`; otherwise, omit "View in factory".
+- `<factory url>`: `${WARP_FACTORY_ORIGIN}/${WARP_FACTORY_ID}/activity` - both env vars are exported for every factory run. Opens the factory's activity feed, not the specific task.
 
 ### Attribution comment
 
-Post the managed attribution comment (`<!-- warp:pr-artifacts-comment start -->` / `<!-- warp:pr-artifacts-comment end -->`) right after creating the PR; when adopting one that already existed before this run, post it before your first other write to it instead. Check first: a comment already carrying both markers means it is posted - do nothing, and never resolve a duplicate yourself. It is exempt from the Footer above - post its body verbatim, with no footer. Use the run/conversation/thread links your brief supplied, not your own sub-run's, so the reader lands on the factory task - but swap only those `href` values and copy every other byte of the handed-down block, its image markup and both marker pairs included. Never rebuild it from memory. Not posting it blocks nothing - note it in your report and move on.
+Post the managed attribution comment (`<!-- warp:pr-artifacts-comment start -->` / `<!-- warp:pr-artifacts-comment end -->`) right after creating the PR; when adopting one that already existed before this run, post it before your first other write to it instead. Check first: a comment already carrying both markers means it is posted - do nothing, and never resolve a duplicate yourself. It is exempt from the Footer above - post its body verbatim, with no footer. Use the run/conversation/thread links your brief supplied, not your own sub-run's, so the reader lands on the factory task. Not posting it blocks nothing - note it in your report and move on.
 
 ## Posting a review
 
@@ -147,7 +147,8 @@ jq -n --rawfile body /tmp/review_body.md \
   GH_PAGER=cat gh api repos/<o>/<r>/pulls/<pr>/reviews --method POST --input -
 ```
 
-- `event` is `REQUEST_CHANGES`, `COMMENT`, or `APPROVE`.
+- `event` is `REQUEST_CHANGES` or `COMMENT`. NEVER use `APPROVE`: a bot approval can satisfy branch protection, and merging is a human decision. When the factory's verdict is acceptance, post a `COMMENT` review whose body includes the line `Verdict: accepted` - that exact marker is what `python3 scripts/request-owner-review` checks before allowing human escalation.
+- When posting a new review pass on a revision, dismiss the factory's own previous review first (`gh api repos/<o>/<r>/pulls/<pr>/reviews/<review_id>/dismissals --method PUT -f message="Superseded by a new review pass" -f event="DISMISS"`), so stale verdicts do not linger.
 - An inline comment must point at a file and line in the PR's diff. GitHub silently drops comments on unchanged lines. Verify each `path` and `line` against the diff first, and move the rest into the body.
 - A suggestion block replaces exactly the commented line range. Keep the indentation exact, and do not include lines from outside the range.
 
@@ -172,7 +173,7 @@ After a revision addresses a review finding:
 Use the bundled script for both steps in one call, with `--footer` from Posting comments above:
 
 ```bash
-scripts/resolve-threads --repo <owner>/<repo> --pr <number> \
+python3 scripts/resolve-threads --repo <owner>/<repo> --pr <number> \
   --thread-ids <PRRT_id1,PRRT_id2> --revision <N> --commit-sha <sha> \
   --footer "$FOOTER"
 ```
@@ -181,11 +182,36 @@ The script replies with a link to the commit, then resolves each listed thread. 
 
 Do not also post a summary comment - the per-thread replies are already the complete record.
 
-## Reviewers
+## Reviewers and workflow gates (script-enforced)
+
+Three bundled scripts make the workflow's gate mechanics deterministic. Always use them instead of raw `gh` for these operations, and obey their exit codes - a BLOCKED result is final for the current pass, never something to work around.
+
+```bash
+# Request the owning maintainer's review - ONLY path to human escalation.
+# Verifies the factory's latest review on the PR is accepted, then requests
+# the exact owner already resolved from live warp-ownership by find-owner.
+# Exit 0 requested / 2 verdict not approving / 3 no owner match / 4 no factory review.
+python3 scripts/request-owner-review <owner>/<repo> <pr> --bot <factory-bot-login> --owner <owner-login>
+
+# Assign the routed owner to an issue after find-owner routing.
+# Exit 0 assigned / 2 not assignable (mention fallback) /
+# 3 issue ineligible because of needs-info, duplicate, or support escalation.
+python3 scripts/assign-issue-owner <owner>/<repo> <issue> <owner-login>
+
+# Verify a gated stage may start. Run before EVERY spec/implement dispatch.
+# Exit 0 proceed / 2 blocked (announce-only if the trigger was a gate label).
+python3 scripts/check-stage-gate <owner>/<repo> <issue> <spec|implement> --factory-login <login> [--mention-trigger]
+
+# Render triage and response comment bodies from the fixed templates.
+# The structure (sections, "Maintainer details"/"Reasoning" expandos,
+# disclaimer, footer) is script-owned; supply only content as JSON on stdin.
+python3 scripts/render-comment <triage|response> < payload.json > /tmp/body.md
+```
+
+Never call `gh pr edit --add-reviewer` directly for workflow escalation. The only raw-reviewer exception is executing an explicit human instruction that names the reviewer (e.g. a maintainer comment "request a review from @x"):
 
 ```bash
 GH_PAGER=cat gh pr edit <pr> --repo <owner>/<repo> --add-reviewer <user>
-GH_PAGER=cat gh pr edit <pr> --repo <owner>/<repo> --remove-reviewer <old> --add-reviewer <new>
 ```
 
 The reviewer's GitHub login is provided to you. Never assume or guess a handle or login - ask the requester when you were not given one.

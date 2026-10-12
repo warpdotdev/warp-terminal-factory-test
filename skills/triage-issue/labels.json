@@ -1,0 +1,56 @@
+{
+  "labels": {
+    "triaged": {
+      "color": "0E8A16",
+      "description": "Initial Oz triage has been completed for this issue"
+    },
+    "bug": {
+      "color": "D73A4A",
+      "description": "Something is not working as expected"
+    },
+    "enhancement": {
+      "color": "A2EEEF",
+      "description": "New capability or improvement request"
+    },
+    "documentation": {
+      "color": "0075CA",
+      "description": "Documentation or guidance update"
+    },
+    "needs-info": {
+      "color": "D93F0B",
+      "description": "The issue needs more information before it can be triaged confidently"
+    },
+    "repro:high": {
+      "color": "B60205",
+      "description": "The report looks highly reproducible from the available information"
+    },
+    "repro:medium": {
+      "color": "FBCA04",
+      "description": "The report looks partially reproducible but has some uncertainty"
+    },
+    "repro:low": {
+      "color": "0E8A16",
+      "description": "The report looks difficult to reproduce from the available information"
+    },
+    "repro:unknown": {
+      "color": "CFD3D7",
+      "description": "There is not enough information to estimate reproducibility"
+    },
+    "area:workflow": {
+      "color": "7057FF",
+      "description": "GitHub workflows, Python automation, or Oz integration"
+    },
+    "area:keyboard-layout": {
+      "color": "D4C5F9",
+      "description": "International keyboard layouts, non-US input sources, or IME/input method issues"
+    },
+    "duplicate": {
+      "color": "CFD3D7",
+      "description": "This issue has been identified as a duplicate of one or more existing issues"
+    },
+    "warp:needs-support": {
+      "color": "5319E7",
+      "description": "This issue cannot be resolved via OSS contributions and should be handled by the Warp support team"
+    }
+  }
+}

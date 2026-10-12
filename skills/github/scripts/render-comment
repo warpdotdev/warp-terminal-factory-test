@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Render a factory comment body from a fixed template. The structure is
+owned by this script; agents supply only content, as JSON on stdin.
+
+Usage: render-comment triage  < payload.json > /tmp/body.md
+       render-comment response < payload.json > /tmp/body.md
+
+Templates (ported from the legacy OSS automation):
+
+triage payload:
+  {
+    "statements": "markdown of triage findings",          # required
+    "maintainer_details": {                                # required
+      "classification": "...",
+      "reproducibility": "...",
+      "investigation": "...",
+      "duplicate_search": "...",
+      "routing_reasoning": "..."
+    },
+    "follow_up_questions": [{"question": "...", "reasoning": "..."}],
+    "duplicates": [{"issue_number": 12, "title": "...", "reason": "..."}],
+    "routing_owner": "login",                              # optional
+    "footer": "Responding as ... View run ..."             # optional
+  }
+  Layout: findings above the fold; follow-up questions; duplicate overlaps;
+  an always-present collapsible "Maintainer details" expando holding structured
+  triage analysis plus duplicate and question reasoning; the routing line; the
+  automated-analysis disclaimer; the footer.
+
+response payload:
+  {
+    "body": "user-facing reply",                           # required
+    "details": "maintainer-only reasoning",                # optional
+    "footer": "..."                                        # optional
+  }
+  Layout: reply above the fold; a collapsible "Reasoning" expando; the
+  disclaimer; the footer.
+"""
+import json
+import sys
+
+DISCLAIMER = "*This is my automated analysis and may be incorrect. A maintainer will verify the details.*"
+
+
+def details_block(summary, body):
+    return f"<details>\n<summary>{summary}</summary>\n\n{body}\n\n</details>"
+
+
+def render_triage(p):
+    parts = []
+    statements = (p.get("statements") or "").strip()
+    if not statements:
+        raise SystemExit("ERROR: triage payload requires non-empty 'statements'")
+    parts.append("Here's what I found while triaging this issue:\n\n" + statements)
+
+    questions = p.get("follow_up_questions") or []
+    if questions:
+        lines = ["I have a few follow-up questions before I can narrow this down:", ""]
+        lines += [f"{i}. {q['question']}" for i, q in enumerate(questions, start=1)]
+        lines += ["", "Reply in-thread with those details and mention the factory, and it will "
+                      "re-evaluate the issue and update the diagnosis, labels, and next steps."]
+        parts.append("\n".join(lines))
+
+    duplicates = p.get("duplicates") or []
+    if duplicates:
+        lines = ["This issue appears to overlap with existing issues:", ""]
+        for d in duplicates:
+            line = f"- #{d['issue_number']}"
+            if d.get("title"):
+                line += f" — {d['title']}"
+            lines.append(line)
+        parts.append("\n".join(lines))
+
+    details = p.get("maintainer_details")
+    if not isinstance(details, dict):
+        raise SystemExit("ERROR: triage payload requires object 'maintainer_details'")
+
+    required_details = (
+        ("classification", "Classification"),
+        ("reproducibility", "Reproducibility"),
+        ("investigation", "Investigation"),
+        ("duplicate_search", "Duplicate search"),
+        ("routing_reasoning", "Routing reasoning"),
+    )
+    maintainer = []
+    for key, heading in required_details:
+        value = (details.get(key) or "").strip()
+        if not value:
+            raise SystemExit(f"ERROR: maintainer_details requires non-empty '{key}'")
+        maintainer.append(f"**{heading}**\n\n{value}")
+    dup_reasons = [f"- #{d['issue_number']}: {d['reason']}" for d in duplicates if d.get("reason")]
+    if dup_reasons:
+        maintainer.append("**Duplicate reasoning**\n\n" + "\n".join(dup_reasons))
+    q_reasons = [f"{i}. **{q['question']}** — {q['reasoning']}"
+                 for i, q in enumerate(questions, start=1) if q.get("reasoning")]
+    if q_reasons:
+        maintainer.append("**Question reasoning**\n\n" + "\n".join(q_reasons))
+    parts.append(details_block("Maintainer details", "\n\n".join(maintainer)))
+
+    owner = (p.get("routing_owner") or "").strip().lstrip("@")
+    if owner:
+        parts.append(f"Routing to @{owner} to review and apply a gate label "
+                     "(`ready-to-spec` / `ready-to-implement`) if this should proceed.")
+
+    parts.append(DISCLAIMER)
+    footer = (p.get("footer") or "").strip()
+    if footer:
+        parts.append(footer)
+    return "\n\n".join(parts)
+
+
+def render_response(p):
+    parts = []
+    body = (p.get("body") or "").strip()
+    if not body:
+        raise SystemExit("ERROR: response payload requires non-empty 'body'")
+    parts.append(body)
+    det = (p.get("details") or "").strip()
+    if det:
+        parts.append(details_block("Reasoning", det))
+    parts.append(DISCLAIMER)
+    footer = (p.get("footer") or "").strip()
+    if footer:
+        parts.append(footer)
+    return "\n\n".join(parts)
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] not in ("triage", "response"):
+        print(__doc__, file=sys.stderr)
+        return 1
+    payload = json.load(sys.stdin)
+    render = render_triage if sys.argv[1] == "triage" else render_response
+    print(render(payload))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

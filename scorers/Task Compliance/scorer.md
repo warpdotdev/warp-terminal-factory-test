@@ -2,7 +2,10 @@
 name: Task Compliance
 description: Whether the agent fulfilled the mandate of its assigned factory role and did what the user or its orchestrating agent asked.
 agents:
+    - warp-terminal-factory Review Agent
     - warp-terminal-factory Foreman Agent
+    - warp-terminal-factory Implement Agent
+    - warp-terminal-factory Spec Agent
     - warp-terminal-factory Triage Agent
 labels:
     - value: fully_compliant
@@ -19,7 +22,7 @@ labels:
       score: 0.5
 passingScore: 0.5
 samplingRate: 10
-model: gpt-5-6-luna-xhigh
+model: gemini-3.7-flash
 selfImprovement: true
 ---
 **Rubric**

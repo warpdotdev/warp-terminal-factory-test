@@ -29,3 +29,5 @@ If none of those links are present and the triggering event is github.pull_reque
 If the triggering event is github.pull_request_closed, do not complete linked work items. This automation also subscribes to github.pull_request_merged, so the merged event is responsible for completion updates. For a closed, unmerged pull request, exit without side effects.
 
 Only act on links attached to the triggering pull request. Do not update unrelated work items or complete unrelated factory tasks.
+
+Regardless of merged or closed: the PR is no longer open, so any in-flight factory review of it is moot. Do not post review output, reviews, or review comments on a closed PR; abandon that work silently.

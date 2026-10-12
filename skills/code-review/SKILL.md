@@ -9,7 +9,7 @@ How to judge a code change and how to write the findings. This skill covers judg
 
 ## What to evaluate
 
-Evaluate every changed artifact against the `code-quality` skill at its path in the available skills catalog, which the author also wrote to. A departure from it is a finding; how much it blocks is below. Judge every test the change adds against Test value below, in addition to code-quality's Tests dimension.
+Evaluate every changed artifact against the `code-quality` skill (`.agents/skills/code-quality/SKILL.md`), which the author also wrote to. A departure from it is a finding; how much it blocks is below. Judge every test the change adds against Test value below, in addition to code-quality's Tests dimension.
 
 Account for every dimension in the findings, the ones with nothing to report included; a dimension you did not examine is reported as unexamined, never as clean. A brief's emphasis adds to the dimensions, it never narrows them.
 

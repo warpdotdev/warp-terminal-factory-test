@@ -7,7 +7,10 @@ codeForges:
 repositories:
     - owner: warpdotdev
       name: warp-stanford
+    - owner: warpdotdev
+      name: warp-ownership
 integrations: []
 agentDefaults:
     model: auto-genius
     runner: default
+    environmentId: HIB3hhZzaXYVJn9q6mC931

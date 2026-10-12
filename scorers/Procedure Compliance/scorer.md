@@ -2,7 +2,10 @@
 name: Procedure Compliance
 description: Whether the agent complied with the standing rules delivered through system context and invoked and followed through on the skills its situation called for.
 agents:
+    - warp-terminal-factory Review Agent
     - warp-terminal-factory Foreman Agent
+    - warp-terminal-factory Implement Agent
+    - warp-terminal-factory Spec Agent
     - warp-terminal-factory Triage Agent
 labels:
     - value: fully_compliant
@@ -16,7 +19,7 @@ labels:
       score: 0.2
 passingScore: 0.5
 samplingRate: 10
-model: gpt-5-6-luna-xhigh
+model: gemini-3.7-flash
 selfImprovement: true
 ---
 **Rubric**
