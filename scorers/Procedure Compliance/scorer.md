@@ -19,7 +19,7 @@ labels:
       score: 0.2
 passingScore: 0.5
 samplingRate: 10
-model: gemini-3.7-flash
+model: gpt-5-6-luna-xhigh
 selfImprovement: true
 ---
 **Rubric**

@@ -15,7 +15,7 @@ labels:
       score: 0.5
 passingScore: 0.5
 samplingRate: 10
-model: gemini-3.7-flash
+model: gpt-5-6-luna-xhigh
 selfImprovement: true
 ---
 **Rubric**
@@ -34,6 +34,7 @@ Assess:
 - **Comments.** Explain why, not what; a comment carries a maintenance cost, so it earns its place only where the code cannot speak for itself, and the reader is a senior engineer — when the names already say how the code works, a comment saying it again is a defect, as is a narration of the syntax line by line ("initialize the array", "loop over the users"). A doc comment on an exported symbol describes its purpose and constraints without narrating its implementation or naming its callers; a doc comment on a container (struct, class, enum, trait, interface) describes the item as a whole rather than enumerating or re-explaining its members, and a member's own doc comment explains that member without restating the container's. No comment describes an edit, a refactor, or a prior state of the code rather than its current behavior; a comment already given once in a doc comment isn't repeated at each call site; an existing comment isn't deleted or rewritten by a change unrelated to it, and is edited only when the logic it describes changed.
 - **Diff hygiene.** The diff contains only the changes that are intended to be committed — no temporary or transient text, screenshots, scratch scripts, or other verification scaffolding committed alongside it.
 - **Documentation.** READMEs, guides, or API docs are updated in the same change when the change affects how the software is built, tested, or used.
+- **Corrections.** A defect the orchestrator raised mid-run — relaying a finding from code review or a report from the user — counts against the artifact regardless of whether it was ultimately fixed; needing an external correction at all is a negative signal, not just a defect left unresolved. Judge only genuinely corrective content: a routine status update, a handoff note, or a claim in the orchestrator's message that is itself wrong doesn't count against the artifact just because it came from the orchestrator.
 Out of scope: whether the implementation process followed the playbook or did what was asked (scored under Task Compliance), and rule-following and skill use, including mechanical conventions like commit format or branch naming (scored under Procedure Compliance). Judge the artifact on its own merits.
 
 **Reason**
